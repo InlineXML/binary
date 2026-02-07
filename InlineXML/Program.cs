@@ -1,4 +1,5 @@
 ﻿using InlineXML.Configuration;
+using InlineXML.Modules.DI;
 
 namespace InlineXML;
 
@@ -16,6 +17,12 @@ class Program
 			mode = ExecutionMode.LanguageServerProtocol;
 		}
 
+		if (args.Contains("--dev"))
+		{
+			Services.InstanceAll(ExecutionMode.DeveloperMode);
+			return;
+		}
+
 		// next check for the --workspace arg, 
 		// we can then get its index and check the next value
 		// if there is one, this null checks etc... 
@@ -31,11 +38,7 @@ class Program
 		
 		// beyond this point, we shouldn't be terminating the process via exceptions.
 		// we can still use them, but they must be caught and handled nicely. 
-
-		if (mode == ExecutionMode.LanguageServerProtocol)
-		{
-			
-		}
+		Services.InstanceAll(mode);
 	}
 	
 	/// <summary>

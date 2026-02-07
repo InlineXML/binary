@@ -77,9 +77,9 @@ public static class ExpressionLocator
     {
         var current = openParen.GetNextToken();
         
-        while (current != closeParen && current.Kind() != SyntaxKind.None)
+        while (current != closeParen && !current.IsKind(SyntaxKind.None))
         {
-            if (current.Kind() == SyntaxKind.LessThanToken)
+            if (current.IsKind(SyntaxKind.LessThanToken))
             {
                 return true;
             }

@@ -1,7 +1,20 @@
 ﻿namespace InlineXML.Configuration;
 
+/// <summary>
+/// defines the operational context of the application. 
+/// this enum drives the initialization of the various service "heads" 
+/// (CLI, LSP, etc.) ensuring the system only allocates resources 
+/// necessary for the current task.
+/// </summary>
 public enum ExecutionMode : byte
 {
+	/// <summary>
+	/// Useful for testing the output of something internally.
+	/// this mode typically enables verbose logging and internal
+	/// state inspection that you wouldn't want in production.
+	/// </summary>
+	DeveloperMode,
+    
 	/// <summary>
 	/// Useful in CLI contexts, such as creating a watcher or
 	/// build, in order to not lock people out of this utility
@@ -11,7 +24,7 @@ public enum ExecutionMode : byte
 	/// etc...
 	/// </summary>
 	CommandLine,
-	
+    
 	/// <summary>
 	/// So, for support from IDEs, we allow them to run in this
 	/// mode, this needs to support all the required endpoints
@@ -21,4 +34,19 @@ public enum ExecutionMode : byte
 	/// mapping.
 	/// </summary>
 	LanguageServerProtocol,
+
+	/// <summary>
+	/// a specialized headless mode for continuous integration.
+	/// unlike the standard command line, this mode treats all
+	/// warnings as errors and produces machine-readable output 
+	/// (like JSON or JUnit) for build pipeline consumption.
+	/// </summary>
+	ContinuousIntegration,
+
+	/// <summary>
+	/// a "dry-run" mode that performs the full transformation 
+	/// and diagnostic pipeline in memory without writing any 
+	/// generated files to the disk. 
+	/// </summary>
+	DiagnosticOnly
 }

@@ -51,4 +51,11 @@ public class WorkspaceEvents
 	/// for files that have undergone transformation.
 	/// </summary>
 	public readonly EventGroup<(string, string)> FileRemoved = new();
+	
+	/// <summary>
+	/// Dispatches when the workspace changes, realistically should only
+	/// be once in a lifecycle, but preventing it being locked allows
+	/// future things where this could be useful.
+	/// </summary>
+	public readonly EventGroup<string> WorkspaceChanged = new();
 }
