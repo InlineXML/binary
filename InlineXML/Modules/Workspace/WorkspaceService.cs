@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using InlineXML.Modules.DI;
 using InlineXML.Modules.Eventing;
-using InlineXML.Modules.InlineXml;
+using Microsoft.CodeAnalysis;
 
 namespace InlineXML.Modules.Workspace;
 
@@ -154,6 +154,54 @@ public class WorkspaceService : AbstractService
        {
           Events.Workspace.FileRegistered.Dispatch(normalizedPath);
        }
+    }
+    
+	/// <summary>
+    /// retrieves all necessary metadata references in a version-agnostic way.
+    /// instead of hardcoding paths, we resolve the location of the core 
+    /// runtime libraries dynamically and include all assemblies loaded 
+    /// in the current execution context.
+    /// </summary>
+    public IEnumerable<MetadataReference> GetProjectReferences()
+    {
+	    var references = new Dictionary<string, MetadataReference>();
+
+	    // 1. DYNAMIC CORE RESOLUTION (Safe & Version Agnostic)
+	    // We grab the directory where the current 'Object' (CoreLib) lives.
+	    var coreDir = Path.GetDirectoryName(typeof(object).Assembly.Location);
+	    if (coreDir != null)
+	    {
+		    // We sweep the core directory for all system DLLs.
+		    foreach (var dll in Directory.GetFiles(coreDir, "System.*.dll"))
+		    {
+			    var name = Path.GetFileName(dll);
+			    references[name] = MetadataReference.CreateFromFile(dll);
+		    }
+	    }
+
+	    // 2. DISCOVERY RESOLUTION (User-Specific DLLs)
+	    // We look for anything in the user's output folders. 
+	    // We use a recursive search to avoid hardcoding "net8.0" or "Debug".
+	    if (Directory.Exists(ProjectRoot))
+	    {
+		    // We look for 'bin' folders which contain the compiled dependencies
+		    var binPath = Path.Combine(ProjectRoot, "bin");
+		    if (Directory.Exists(binPath))
+		    {
+			    var allDlls = Directory.GetFiles(binPath, "*.dll", SearchOption.AllDirectories);
+			    foreach (var dll in allDlls)
+			    {
+				    var name = Path.GetFileName(dll);
+				    // We only add it if we haven't already added a system version
+				    if (!references.ContainsKey(name))
+				    {
+					    references[name] = MetadataReference.CreateFromFile(dll);
+				    }
+			    }
+		    }
+	    }
+
+	    return references.Values;
     }
 
     /// <summary>
