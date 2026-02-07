@@ -38,10 +38,17 @@ public class WorkspaceEvents
 	/// operations dependent on file registration.
 	/// </para>
 	/// </remarks>
-	public EventGroup<string> FileRegistered = new();
+	public readonly EventGroup<string> FileRegistered = new();
 	
 	/// <summary>
 	/// Dispatches when a file that's already registered changes.
 	/// </summary>
-	public EventGroup<string> FileChanged = new();
+	public readonly EventGroup<string> FileChanged = new();
+	
+	/// <summary>
+	/// Dispatches when a file has been removed from the workspace,
+	/// The second item in the tuple is for the mapped output file
+	/// for files that have undergone transformation.
+	/// </summary>
+	public readonly EventGroup<(string, string)> FileRemoved = new();
 }

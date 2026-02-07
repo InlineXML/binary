@@ -36,5 +36,5 @@ public class RoslynEvents
 	/// operations that require access to the parsed syntax tree of a file.
 	/// </para>
 	/// </remarks>
-	public readonly EventGroup<SyntaxTree> FileParsed = new();
+	public readonly EventGroup<(string, SyntaxTree)> FileParsed = new();
 }

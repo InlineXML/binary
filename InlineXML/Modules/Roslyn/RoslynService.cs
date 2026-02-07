@@ -30,7 +30,7 @@ public class RoslynService : AbstractService
 		var parser = CSharpSyntaxTree.ParseText(File.ReadAllText(file));
 
 		// emit the file to allow processing elsewhere.
-		Events.Roslyn.FileParsed.Dispatch(parser);
+		Events.Roslyn.FileParsed.Dispatch((file, parser));
 			
 		return file;
 	}
