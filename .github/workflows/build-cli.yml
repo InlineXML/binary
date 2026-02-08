@@ -5,7 +5,7 @@ on:
     branches: [master]
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -40,9 +40,22 @@ jobs:
         shell: pwsh
         run: Get-ChildItem -Recurse ./publish
 
-      # Upload binaries so you can download them
-      - name: Upload binaries
-        uses: actions/upload-artifact@v4
+      # Create or update a GitHub Release
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
         with:
-          name: publish-${{ matrix.os }}
-          path: ./publish
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+
+      # Upload platform-specific binaries to the Release
+      - name: Upload binaries to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./publish/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
