@@ -39,3 +39,10 @@ jobs:
       - name: Show publish output
         shell: pwsh
         run: Get-ChildItem -Recurse ./publish
+
+      # Upload binaries so you can download them
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-${{ matrix.os }}
+          path: ./publish
