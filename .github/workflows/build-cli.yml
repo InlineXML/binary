@@ -1,4 +1,4 @@
-﻿name: Build CLI Binaries & Release
+﻿name: Build CLI Binaries
 
 on:
   push:
@@ -19,54 +19,20 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      # Restore dependencies
       - run: dotnet restore InlineXML/InlineXML.csproj
 
-      - name: Publish self-contained binary
+      # Publish self-contained binaries
+      - name: Publish binaries
         run: |
-          RUNTIME=$([[ "${{ matrix.os }}" == "windows-latest" ]] && echo "win-x64" || \
-                     [[ "${{ matrix.os }}" == "macos-latest" ]] && echo "osx-x64" || echo "linux-x64")
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            RUNTIME="win-x64"
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            RUNTIME="osx-x64"
+          else
+            RUNTIME="linux-x64"
+          fi
           dotnet publish InlineXML/InlineXML.csproj -c ${{ matrix.configuration }} -r $RUNTIME --self-contained true -o ./publish/$RUNTIME
 
-      # Upload each OS build as an artifact
-      - uses: actions/upload-artifact@v3
-        with:
-          name: publish-${{ matrix.os }}
-          path: ./publish/$RUNTIME
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      # Download all OS builds
-      - uses: actions/download-artifact@v3
-        with:
-          name: publish-ubuntu-latest
-          path: ./publish/ubuntu
-      - uses: actions/download-artifact@v3
-        with:
-          name: publish-windows-latest
-          path: ./publish/windows
-      - uses: actions/download-artifact@v3
-        with:
-          name: publish-macos-latest
-          path: ./publish/macos
-
-      # Get project version
-      - name: Get project version
-        id: get_version
-        run: |
-          VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' InlineXML/InlineXML.csproj)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      # Create GitHub Release with your secret token
-      - name: Create GitHub Release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: v${{ env.VERSION }}
-          name: v${{ env.VERSION }}
-          artifacts: ./publish
-          token: ${{ secrets.REPO_TOKEN }}
-          draft: false
-          prerelease: false
+      - name: Show publish output
+        run: ls -R ./publish
