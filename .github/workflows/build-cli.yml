@@ -5,7 +5,7 @@ on:
     branches: [master]
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -13,32 +13,54 @@ jobs:
         configuration: [Release]
 
     steps:
-      # 1. Checkout repo
       - uses: actions/checkout@v3
 
-      # 2. Setup .NET
       - uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '9.0.x'
 
-      # 3. Restore dependencies
       - run: dotnet restore InlineXML/InlineXML.csproj
 
-      # 4. Publish self-contained binaries
-      - run: |
+      - name: Publish self-contained binary
+        run: |
           RUNTIME=$([[ "${{ matrix.os }}" == "windows-latest" ]] && echo "win-x64" || \
                      [[ "${{ matrix.os }}" == "macos-latest" ]] && echo "osx-x64" || echo "linux-x64")
           dotnet publish InlineXML/InlineXML.csproj -c ${{ matrix.configuration }} -r $RUNTIME --self-contained true -o ./publish/$RUNTIME
 
-      # 5. Determine project version
+      # Upload each OS build as an artifact
+      - uses: actions/upload-artifact@v3
+        with:
+          name: publish-${{ matrix.os }}
+          path: ./publish/$RUNTIME
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # Download all OS builds
+      - uses: actions/download-artifact@v3
+        with:
+          name: publish-ubuntu-latest
+          path: ./publish/ubuntu
+      - uses: actions/download-artifact@v3
+        with:
+          name: publish-windows-latest
+          path: ./publish/windows
+      - uses: actions/download-artifact@v3
+        with:
+          name: publish-macos-latest
+          path: ./publish/macos
+
+      # Get project version
       - name: Get project version
         id: get_version
         run: |
           VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' InlineXML/InlineXML.csproj)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "Project version: $VERSION"
 
-      # 6. Create GitHub Release and attach binaries
+      # Create GitHub Release with your secret token
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
