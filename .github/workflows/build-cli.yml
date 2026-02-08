@@ -38,7 +38,7 @@ jobs:
         shell: pwsh
         run: Get-ChildItem -Recurse ./publish
 
-      - name: Create GitHub Release
+      - name: Create and Upload to GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
@@ -46,12 +46,9 @@ jobs:
           name: Release v1.0.${{ github.run_number }}
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
-
-      - name: Upload binaries to Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: ./publish/**/*
+          files: |
+            ./publish/win-x64/*
+            ./publish/osx-x64/*
+            ./publish/linux-x64/*
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
