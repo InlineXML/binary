@@ -48,17 +48,47 @@ public static class ExpressionLocator
     /// <returns>A collection of tuples containing the start and end positions of each expression found.</returns>
     public static IEnumerable<(int Start, int End)> FindExpressions(SyntaxNode node)
     {
-        var parenthesizedExpressions = node.DescendantNodes()
-            .OfType<ParenthesizedExpressionSyntax>();
+	    var text = node.SyntaxTree.GetText();
+	    var parenthesizedExpressions = node.DescendantNodes()
+		    .OfType<ParenthesizedExpressionSyntax>();
 
-        foreach (var expr in parenthesizedExpressions)
-        {
-            // Check if this parenthesized expression contains an opening angle bracket
-            if (ContainsAngleBracket(expr.OpenParenToken, expr.CloseParenToken))
-            {
-                yield return (expr.SpanStart, expr.Span.End);
-            }
-        }
+	    foreach (var expr in parenthesizedExpressions)
+	    {
+		    // 1. Get the first token inside the (
+		    var firstInnerToken = expr.OpenParenToken.GetNextToken();
+        
+		    // 2. STRENGTHENED CHECK: Must be a '<' AND the next token MUST be a Tag Name
+		    // This prevents triggering on (2 < 5) because '2' is not a Tag Name identifier.
+		    if (firstInnerToken.IsKind(SyntaxKind.LessThanToken))
+		    {
+			    var potentialTagName = firstInnerToken.GetNextToken();
+			    if (!potentialTagName.IsKind(SyntaxKind.IdentifierToken)) 
+				    continue; // It's a comparison like (< 5), skip it.
+
+			    int openPos = expr.OpenParenToken.SpanStart;
+			    int balance = 0;
+			    int end = -1;
+
+			    // 3. STACK-BASED BALANCING
+			    // We walk the text manually to find the REAL matching ')'
+			    for (int i = openPos; i < text.Length; i++)
+			    {
+				    if (text[i] == '(') balance++;
+				    else if (text[i] == ')') balance--;
+
+				    if (balance == 0)
+				    {
+					    end = i + 1; 
+					    break;
+				    }
+			    }
+
+			    if (end != -1)
+			    {
+				    yield return (expr.SpanStart, end);
+			    }
+		    }
+	    }
     }
 
     /// <summary>

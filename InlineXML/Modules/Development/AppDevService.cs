@@ -1,171 +1,147 @@
-﻿using InlineXML.Modules.DI;
+﻿using InlineXML.Configuration;
+using InlineXML.Modules.DI;
 using InlineXML.Modules.Eventing;
 using InlineXML.Modules.InlineXml;
+using InlineXML.Modules.Roslyn;
+using InlineXML.Modules.Transformation;
+using Microsoft.CodeAnalysis.CSharp;
+using System.Text;
 
 namespace InlineXML.Modules.Development;
 
-/// <summary>
-/// Development service for InlineXML tool contributors and debuggers.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <c>AppDevService</c> is intended exclusively for tool contributors and developers working on
-/// the InlineXML framework itself. This service is NOT part of the public API and should never
-/// be used or referenced by end users of the tool.
-/// </para>
-/// <para>
-/// This service is typically activated via a development flag (e.g., <c>--dev</c>) and provides
-/// quick visibility into execution flow, transformations, and internal state changes during
-/// development and debugging sessions.
-/// </para>
-/// <para>
-/// Use this service to prototype features, validate parser behavior, inspect token streams,
-/// and generally iterate quickly on the framework without needing external test projects.
-/// </para>
-/// </remarks>
 public class AppDevService : AbstractService
 {
-    /// <summary>
-    /// Initializes the development service and hooks into the application startup lifecycle.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The service subscribes to the <see cref="Events.AfterAllServicesReady"/> event to execute
-    /// development-time code after all other services have been fully initialized. This ensures
-    /// that the entire framework is ready before dev-specific logic runs.
-    /// </para>
-    /// </remarks>
     public AppDevService()
     {
        Events.AfterAllServicesReady.AddEventListener(mode =>
        {
-          Main();
-          return mode;
+           if (mode is ExecutionMode.DeveloperMode) Main();
+           return mode;
        });
     }
 
-    /// <summary>
-    /// Main entry point for development-time execution and debugging.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Override or extend this method to add your own development and debugging logic.
-    /// This is where you can quickly prototype features, inspect parser output, validate
-    /// transformations, or trace execution paths without needing a separate test project.
-    /// </para>
-    /// <remarks>
-    /// Examples:
-    /// <list type="bullet">
-    /// <item>Print parsed token streams to verify parser correctness</item>
-    /// <item>Log syntax tree transformations and AST modifications</item>
-    /// <item>Benchmark component resolution and expression parsing</item>
-    /// <item>Validate code generation output before writing files</item>
-    /// <item>Trace event dispatch and service initialization order</item>
-    /// </list>
-    /// </remarks>
-    /// </remarks>
     private void Main()
     {
-        // Sample XCS component code for testing
         var xcsCode = @"
-return (
-    <div className=""container"">
-        <h1>{ title }</h1>
-        <button onClick={ handleClick }>
-            Click {username} me
-        </button>
+namespace SevenUI.ExtendedSharp.Examples;
+using XMLTest;
+public static class Component
+{
+    public static FunctionalComponent<NodeProps> Loading = (props, children) => {
+        return (
+           <div className=""loading"">
+                <p>Loading...</p>
+            </div>
+        );
+    };
+
+    public static FunctionalComponent<UserComponentProps> UserComponent = (props, children) => {
+        var id = 1;
+        return (
+            <div id={""user-"" + id}>
+                <p>Hello</p>
+            </div>
+        );
+    };
+}";
+
+        var syntaxTree = CSharpSyntaxTree.ParseText(xcsCode);
+        var xmlExpressions = ExpressionLocator.FindExpressions(syntaxTree).ToList();
+    
+        var resultBuilder = new StringBuilder();
+        var globalSourceMaps = new List<SourceMapEntry>();
+        int lastPosition = 0;
+        int currentTransformedOffset = 0;
+
+        foreach (var (start, end) in xmlExpressions)
         {
-            items.map(item => (
-                <div key={ item.id }>
-                    <p>{ item.name }</p>
-                {1 < 5 ? ""Hello"" : ""World""}
-                </div>
-            ))
-        }
-    </div>
-);
-";
+            // 1. MAP THE LEADING C# (The Identity Chunk)
+            // This maps the code between XML blocks (including namespaces, class defs, etc.)
+            string leadingCs = xcsCode.Substring(lastPosition, start - lastPosition);
+            if (!string.IsNullOrEmpty(leadingCs))
+            {
+                globalSourceMaps.Add(new SourceMapEntry
+                {
+                    OriginalStart = lastPosition,
+                    OriginalEnd = start,
+                    TransformedStart = currentTransformedOffset,
+                    TransformedEnd = currentTransformedOffset + leadingCs.Length
+                });
+                resultBuilder.Append(leadingCs);
+                currentTransformedOffset += leadingCs.Length;
+            }
 
-        System.Console.WriteLine("=== TOKENS ===\n");
-
-        // Parse the XCS code into tokens
-        var parser = new Parser("Factory", "CreateElement");
-        var codeSpan = xcsCode.AsSpan();
-        var tokens = parser.Parse(ref codeSpan);
-
-        // Output all tokens
-        foreach (var token in tokens)
-        {
-            var value = codeSpan.Slice(token.Start, token.End - token.Start).ToString();
-            System.Console.WriteLine($"[{token.Kind}] \"{value}\" (pos {token.Start}-{token.End})");
-        }
-
-        System.Console.WriteLine("\n=== AST ===\n");
-
-        // Build AST from tokens
-        var builder = new AstBuilder();
-        var ast = builder.Build(tokens, codeSpan);
-
-        PrintAst(ast, codeSpan, indent: 0);
-
-        System.Console.WriteLine("\n=== GENERATED CODE ===\n");
-
-        // Generate C# code from AST
-        var generator = new CodeGenerator("Factory", "CreateElement");
-        var generatedCode = generator.Generate(ast, out var sourceMap);
-        
-        System.Console.WriteLine(generatedCode);
-
-        System.Console.WriteLine("\n=== SOURCE MAP ===\n");
-
-        // Output source map entries
-        foreach (var entry in sourceMap)
-        {
-            System.Console.WriteLine($"Original: {entry.OriginalStart}-{entry.OriginalEnd} → Transformed: {entry.TransformedStart}-{entry.TransformedEnd}");
-        }
-		
-
-    }
-
-    private void PrintAst(List<AstNode> nodes, ReadOnlySpan<char> source, int indent)
-    {
-        foreach (var node in nodes)
-        {
-            var prefix = new string(' ', indent * 2);
+            // 2. TRANSFORM XML
+            var rawFragment = xcsCode.Substring(start, end - start);
+            var trimmedFragment = rawFragment.Trim();
             
-            if (node is ElementNode element)
+            // Calculate internal shift caused by .Trim() and the opening '('
+            int internalXmlOffset = rawFragment.IndexOf(trimmedFragment) + 1; 
+            
+            var xmlOnly = trimmedFragment.Substring(1, trimmedFragment.Length - 2);
+            var xmlSpan = xmlOnly.AsSpan();
+
+            var parser = new Parser("Document", "CreateElement");
+            var tokens = parser.Parse(ref xmlSpan);
+
+            var builder = new AstBuilder();
+            var ast = builder.Build(tokens, xmlOnly.AsSpan());
+
+            var generator = new CodeGenerator("Document", "CreateElement");
+            var generatedCode = generator.Generate(ast, out var localMaps);
+
+            // 3. WEAVE AND MAP GENERATED CODE
+            resultBuilder.Append("(");
+            int codeStartInFile = currentTransformedOffset + 1;
+            resultBuilder.Append(generatedCode);
+            resultBuilder.Append(")");
+
+            foreach (var local in localMaps)
             {
-                System.Console.WriteLine($"{prefix}<{element.TagName}>");
-                
-                if (element.Attributes.Count > 0)
+                globalSourceMaps.Add(new SourceMapEntry
                 {
-                    System.Console.WriteLine($"{prefix}  [attributes]");
-                    foreach (var (name, value) in element.Attributes)
-                    {
-                        var valueStr = value switch
-                        {
-                            StringLiteralNode str => $"\"{str.Value}\"",
-                            ExpressionNode expr => expr.Expression,
-                            _ => "?"
-                        };
-                        System.Console.WriteLine($"{prefix}    {name} = {valueStr}");
-                    }
-                }
-                
-                if (element.Children.Count > 0)
-                {
-                    System.Console.WriteLine($"{prefix}  [children]");
-                    PrintAst(element.Children, source, indent + 2);
-                }
+                    OriginalStart = start + internalXmlOffset + local.OriginalStart,
+                    OriginalEnd = start + internalXmlOffset + local.OriginalEnd,
+                    TransformedStart = codeStartInFile + local.TransformedStart,
+                    TransformedEnd = codeStartInFile + local.TransformedEnd
+                });
             }
-            else if (node is ExpressionNode expr)
-            {
-                System.Console.WriteLine($"{prefix}{{ {expr.Expression} }}");
-            }
-            else if (node is StringLiteralNode str)
-            {
-                System.Console.WriteLine($"{prefix}\"{str.Value}\"");
-            }
+
+            // Update trackers (+2 for the added parentheses)
+            currentTransformedOffset += (generatedCode.Length + 2);
+            lastPosition = end;
         }
+
+        // 4. MAP THE TRAILING C#
+        if (lastPosition < xcsCode.Length)
+        {
+            string trailingCs = xcsCode.Substring(lastPosition);
+            globalSourceMaps.Add(new SourceMapEntry
+            {
+                OriginalStart = lastPosition,
+                OriginalEnd = xcsCode.Length,
+                TransformedStart = currentTransformedOffset,
+                TransformedEnd = currentTransformedOffset + trailingCs.Length
+            });
+            resultBuilder.Append(trailingCs);
+        }
+
+        // --- OUTPUT FOR VERIFICATION ---
+        System.Console.WriteLine("--- TRANSFORMED CODE ---");
+        System.Console.WriteLine(resultBuilder.ToString());
+        
+        System.Console.WriteLine("\n--- FULL SOURCE MAPS (TOTAL COVERAGE) ---");
+        foreach (var map in globalSourceMaps.OrderBy(m => m.TransformedStart))
+        {
+            // Calculate a snippet of the original content to verify the range
+            int len = Math.Min(20, map.OriginalEnd - map.OriginalStart);
+            string snippet = xcsCode.Substring(map.OriginalStart, len).Replace("\r", "").Replace("\n", "\\n");
+            
+            System.Console.WriteLine($"Trans: {map.TransformedStart,4}..{map.TransformedEnd,-4} | Orig: {map.OriginalStart,4}..{map.OriginalEnd,-4} | Snippet: [{snippet}]");
+        }
+        
+        System.Console.WriteLine($"\nOriginal Length: {xcsCode.Length}");
+        System.Console.WriteLine($"Transformed Length: {resultBuilder.Length}");
+        System.Console.WriteLine($"Total Map Count: {globalSourceMaps.Count}");
     }
 }

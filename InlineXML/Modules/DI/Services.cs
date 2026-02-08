@@ -38,7 +38,7 @@ public static class Services
     /// </summary>
     /// <param name="t"></param>
     /// <returns></returns>
-    private static AbstractService? Get(Type t)
+    public static AbstractService? Get(Type t)
     {
        // if the service is already in our cache, we return it immediately.
        if (ServiceCache.TryGetValue(t, out var service))

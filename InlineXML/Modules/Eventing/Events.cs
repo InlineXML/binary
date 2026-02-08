@@ -1,4 +1,7 @@
-﻿namespace InlineXML.Modules.Eventing;
+﻿using System.Diagnostics;
+using System.Reflection;
+
+namespace InlineXML.Modules.Eventing;
 
 /// <summary>
 /// Contains event-related utilities and functionality for the application.
@@ -11,31 +14,11 @@ public static partial class Events
 /// <summary>
 /// A generic event dispatcher that chains multiple event listeners together.
 /// </summary>
-/// <remarks>
-/// <para>
-/// <c>EventGroup&lt;T&gt;</c> implements a pipeline pattern where event listeners are executed
-/// sequentially, with each listener's output becoming the next listener's input.
-/// </para>
-/// <para>
-/// This is useful for scenarios where multiple handlers need to process or transform
-/// the same object in a specific order, such as middleware chains or event pipelines.
-/// </para>
-/// </remarks>
 /// <typeparam name="T">The type of object being passed through the event pipeline.</typeparam>
 public class EventGroup<T>
 {
     private readonly List<Func<T, T>> _events = [];
 
-    /// <summary>
-    /// Registers an event listener to be invoked when an event is dispatched.
-    /// </summary>
-    /// <remarks>
-    /// Listeners are invoked in the order they were added. Each listener receives the
-    /// output of the previous listener as input.
-    /// </remarks>
-    /// <param name="listener">A function that accepts an object of type <typeparamref name="T"/>,
-    /// processes it, and returns the (possibly modified) object.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="listener"/> is null.</exception>
     public void AddEventListener(Func<T, T> listener)
     {
        ArgumentNullException.ThrowIfNull(listener);
@@ -43,75 +26,106 @@ public class EventGroup<T>
     }
 
     /// <summary>
-    /// Dispatches an event by passing the given object through all registered listeners.
+    /// Dispatches an event and forces visibility into the console.
+    /// It attempts to resolve the name of the event from the caller context.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Listeners are executed sequentially in the order they were registered. Each listener
-    /// receives the output of the previous listener, allowing for object transformation
-    /// at each stage of the pipeline.
-    /// </para>
-    /// <para>
-    /// If no listeners are registered, the original object is returned unchanged.
-    /// </para>
-    /// </remarks>
-    /// <param name="obj">The object to dispatch through the event pipeline.</param>
-    /// <returns>The object after being processed by all registered listeners.</returns>
     public T Dispatch(T obj)
     {
-       foreach (var consumer in _events)
+       var eventName = GetEventName();
+       
+       System.Console.ForegroundColor = System.ConsoleColor.Cyan;
+       System.Console.WriteLine($"[EVENT] >>> {eventName} | Type: {typeof(T).Name} | Listeners: {_events.Count}");
+       System.Console.ResetColor();
+
+       if (_events.Count == 0)
        {
-          obj = consumer(obj);
+          System.Console.ForegroundColor = System.ConsoleColor.Yellow;
+          System.Console.WriteLine($"[WARNING] {eventName} has NO listeners. This event is a no-op!");
+          System.Console.ResetColor();
+       }
+
+       for (int i = 0; i < _events.Count; i++)
+       {
+          try
+          {
+             obj = _events[i](obj);
+          }
+          catch (Exception ex)
+          {
+             System.Console.ForegroundColor = System.ConsoleColor.Red;
+             System.Console.Error.WriteLine($"[ERROR] {eventName} failed at listener index {i}");
+             System.Console.Error.WriteLine($"Exception: {ex.Message}");
+             System.Console.Error.WriteLine(ex.StackTrace);
+             System.Console.ResetColor();
+             throw;
+          }
        }
 
        return obj;
+    }
+
+    private string GetEventName()
+    {
+        // Walk the stack to find who owns this instance in the Events class
+        var stack = new StackTrace();
+        foreach (var frame in stack.GetFrames())
+        {
+            var method = frame.GetMethod();
+            if (method == null) continue;
+            
+            // Check fields in the Events partial classes
+            var fields = typeof(Events).GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            foreach (var field in fields)
+            {
+                if (ReferenceEquals(field.GetValue(null), this)) return field.Name;
+                
+                // Check nested properties (like Events.Workspace.FileChanged)
+                var value = field.GetValue(null);
+                if (value == null) continue;
+                var subFields = value.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance);
+                foreach (var subField in subFields)
+                {
+                    if (ReferenceEquals(subField.GetValue(value), this)) return $"{field.Name}.{subField.Name}";
+                }
+            }
+        }
+        return "UnknownEvent";
     }
 }
 
 /// <summary>
 /// A simple event dispatcher for events that do not pass data to listeners.
 /// </summary>
-/// <remarks>
-/// <para>
-/// <c>EventGroup</c> is a non-generic variant of <see cref="EventGroup{T}"/> used for
-/// events that only signal that something has occurred, without requiring data to be
-/// passed to or between listeners.
-/// </para>
-/// <para>
-/// This is useful for notification-style events such as application startup, shutdown,
-/// or other state changes where listeners only need to know that an event occurred.
-/// </para>
-/// </remarks>
 public class EventGroup
 {
     private readonly List<Action> _events = [];
 
-    /// <summary>
-    /// Registers an event listener to be invoked when an event is dispatched.
-    /// </summary>
-    /// <remarks>
-    /// Listeners are invoked in the order they were added.
-    /// </remarks>
-    /// <param name="listener">An action to be executed when the event is dispatched.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="listener"/> is null.</exception>
     public void AddEventListener(Action listener)
     {
        ArgumentNullException.ThrowIfNull(listener);
        _events.Add(listener);
     }
 
-    /// <summary>
-    /// Dispatches an event by invoking all registered listeners.
-    /// </summary>
-    /// <remarks>
-    /// Listeners are executed sequentially in the order they were registered.
-    /// If no listeners are registered, this method completes without performing any actions.
-    /// </remarks>
     public void Dispatch()
     {
+       System.Console.ForegroundColor = System.ConsoleColor.Magenta;
+       System.Console.WriteLine($"[SIGNAL] >>> Triggered Signal | Listeners: {_events.Count}");
+       System.Console.ResetColor();
+
        foreach (var listener in _events)
        {
-          listener();
+          try
+          {
+             listener();
+          }
+          catch (Exception ex)
+          {
+             System.Console.ForegroundColor = System.ConsoleColor.Red;
+             System.Console.Error.WriteLine($"[ERROR] Signal failed!");
+             System.Console.Error.WriteLine($"Exception: {ex.Message}");
+             System.Console.ResetColor();
+             throw;
+          }
        }
     }
 }
