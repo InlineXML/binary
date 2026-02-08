@@ -32,23 +32,20 @@ jobs:
               $runtime = "linux-x64"
           }
 
+          # Publish to a specific folder
           dotnet publish InlineXML/InlineXML.csproj -c ${{ matrix.configuration }} -r $runtime --self-contained true -o ./publish/$runtime
-
-      - name: Show publish output
-        shell: pwsh
-        run: Get-ChildItem -Recurse ./publish
+          
+          # Zip the contents so we only upload ONE file
+          Compress-Archive -Path ./publish/$runtime/* -DestinationPath ./publish/InlineXML-$runtime.zip
 
       - name: Create and Upload to GitHub Release
-        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Release v1.0.${{ github.run_number }}
           draft: false
           prerelease: false
-          files: |
-            ./publish/win-x64/*
-            ./publish/osx-x64/*
-            ./publish/linux-x64/*
+          # Only upload the zip file created in the previous step
+          files: ./publish/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
