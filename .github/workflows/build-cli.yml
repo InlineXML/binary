@@ -24,15 +24,18 @@ jobs:
 
       # Publish self-contained binaries
       - name: Publish binaries
+        shell: pwsh
         run: |
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            RUNTIME="win-x64"
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            RUNTIME="osx-x64"
-          else
-            RUNTIME="linux-x64"
-          fi
-          dotnet publish InlineXML/InlineXML.csproj -c ${{ matrix.configuration }} -r $RUNTIME --self-contained true -o ./publish/$RUNTIME
+          if ($env:RUNNER_OS -eq "Windows") {
+              $runtime = "win-x64"
+          } elseif ($env:RUNNER_OS -eq "macOS") {
+              $runtime = "osx-x64"
+          } else {
+              $runtime = "linux-x64"
+          }
+
+          dotnet publish InlineXML/InlineXML.csproj -c ${{ matrix.configuration }} -r $runtime --self-contained true -o ./publish/$runtime
 
       - name: Show publish output
-        run: ls -R ./publish
+        shell: pwsh
+        run: Get-ChildItem -Recurse ./publish
