@@ -57,9 +57,11 @@ public class CodeGenerator
     /// </summary>
     private void GenerateNodeList(List<AstNode> nodes, bool nested)
     {
-        // ELI5: Filter out "ghost" nodes (empty spaces or newlines in the XML 
-        // that don't need to be C# code).
-        var validNodes = nodes.Where(n => !(n is StringLiteralNode s && string.IsNullOrWhiteSpace(s.Value))).ToList();
+        var validNodes = nodes.Where(n => {
+            if (n is StringLiteralNode s && string.IsNullOrWhiteSpace(s.Value)) return false;
+            if (n is ExpressionNode ex && IsComment(ex.Expression)) return false;
+            return true;
+        }).ToList();
         
         for (int i = 0; i < validNodes.Count; i++)
         {
@@ -86,10 +88,12 @@ public class CodeGenerator
     }
 
     /// <summary>
-    /// Processes C# expressions embedded in XML (e.g., {props.Title}).
+    /// Generates C# code for expressions, handling logical headers (like loops) and mapping.
     /// </summary>
     private void GenerateExpression(ExpressionNode ex)
     {
+        if (IsComment(ex.Expression)) return;
+
         int start = _output.Length;
         string body = ex.Expression.Trim();
         
@@ -130,9 +134,12 @@ public class CodeGenerator
         });
     }
 
-    /// <summary>
-    /// Extracts the logical C# prefix before an inline XML tag appears in an expression.
-    /// </summary>
+    private bool IsComment(string expression)
+    {
+        string trimmed = expression.Trim();
+        return trimmed.StartsWith("{/*") || trimmed.StartsWith("/*");
+    }
+
     private string ExtractLogicHeader(string body)
     {
         int xmlIndex = body.IndexOf('<');
@@ -156,7 +163,7 @@ public class CodeGenerator
     }
 
     /// <summary>
-    /// Generates a factory method call representing an XML element (e.g., UI.Create("div", ...)).
+    /// Generates a factory method call for an XML element.
     /// </summary>
     private void GenerateElement(ElementNode element)
     {
@@ -189,7 +196,11 @@ public class CodeGenerator
                 
                 // ELI5: If the attribute is a string "hello", keep it as "hello".
                 // If it's an expression {val}, treat it as code.
-                if (attr.value is StringLiteralNode s) _output.Append($"\"{s.Value.Trim('\"', '\'')}\"");
+                if (attr.value is StringLiteralNode s) 
+                {
+                    // ELI5: Attributes also use verbatim strings to handle multiline values.
+                    _output.Append($"@\"{s.Value.Trim('\"', '\'').Replace("\"", "\"\"")}\"");
+                }
                 else if (attr.value is ExpressionNode ex)
                 {
                     string inner = ex.Expression.Trim();
@@ -206,8 +217,13 @@ public class CodeGenerator
         }
         else _output.Append("()");
 
-        // Children Logic
-        if (element.Children.Count > 0) 
+        var validChildren = element.Children.Where(n => {
+            if (n is StringLiteralNode s && string.IsNullOrWhiteSpace(s.Value)) return false;
+            if (n is ExpressionNode ex && IsComment(ex.Expression)) return false;
+            return true;
+        }).ToList();
+
+        if (validChildren.Count > 0) 
         { 
             _output.Append(",\n"); 
             GenerateNodeList(element.Children, true); 
@@ -224,13 +240,19 @@ public class CodeGenerator
     }
 
     /// <summary>
-    /// Escapes and writes a raw string literal to the output.
+    /// Handles multiline text content by using C# verbatim string literals.
     /// </summary>
+    /// <remarks>
+    /// Double quotes are escaped by doubling them ("") to comply with verbatim syntax.
+    /// </remarks>
     private void GenerateStringLiteral(StringLiteralNode s)
     {
         int start = _output.Length;
-        // ELI5: If the text has quotes inside it, add backslashes so C# doesn't get confused.
-        _output.Append($"\"{s.Value.Replace("\"", "\\\"")}\"");
+        // ELI5: Using @"" allows the string to span multiple lines in C#.
+        // We replace " with "" because that's how you escape quotes in a verbatim string.
+        string escaped = s.Value.Replace("\"", "\"\"");
+        _output.Append($"@\"{escaped}\"");
+
         _sourceMap.Add(new SourceMapEntry {
             OriginalStart = s.SourceStart, TransformedStart = start,
             OriginalEnd = s.SourceEnd, TransformedEnd = _output.Length
