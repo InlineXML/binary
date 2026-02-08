@@ -315,7 +315,7 @@ public class WorkspaceService : AbstractService
     /// If you have a file at "C:\MyProject\src\Utilities\Helper.cs" and the .csproj is at "C:\MyProject\",
     /// this method will walk up: Helper.cs → Utilities → src → MyProject (found .csproj!) and return "C:\MyProject\".
     /// </example>
-    private string FindProjectDir(string startPath)
+    public string FindProjectDir(string startPath)
     {
         // Normalize the start path
         var localStartPath = SanitizePath(_fileService.ToLocalPath(startPath));

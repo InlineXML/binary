@@ -8,6 +8,7 @@ using InlineXML.Modules.Eventing;
 using InlineXML.Modules.Files;
 using InlineXML.Modules.InlineXml;
 using InlineXML.Modules.Routing;
+using InlineXML.Modules.Workspace;
 using Microsoft.CodeAnalysis.Text;
 using Diagnostic = InlineXML.Modules.Routing.Diagnostic;
 using Range = InlineXML.Modules.Routing.Range;
@@ -23,10 +24,11 @@ namespace InlineXML.Modules.Roslyn;
 /// using the .NET Compiler Platform (Roslyn), and maps generated code errors back to 
 /// their original line/column positions in the source XML via <see cref="SourceMapEntry"/>.
 /// </remarks>
-public class DiagnosticService : AbstractService
+public partial class DiagnosticService : AbstractService
 {
     private readonly FileService _fileService;
     private readonly RoutingService _router;
+    private readonly WorkspaceService _workspaceService;
     
     /// <summary> Caches source mappings keyed by the generated file path. </summary>
     private readonly ConcurrentDictionary<string, (string SourceUri, List<SourceMapEntry> Maps)> _sourceMapCache = new(StringComparer.OrdinalIgnoreCase);
@@ -45,10 +47,11 @@ public class DiagnosticService : AbstractService
     /// </summary>
     /// <param name="fileService">Service for URI/Path resolution.</param>
     /// <param name="router">Service for communicating diagnostics to the client/LSP.</param>
-    public DiagnosticService(FileService fileService, RoutingService router)
+    public DiagnosticService(FileService fileService, RoutingService router, WorkspaceService workspaceService)
     {
         _fileService = fileService;
         _router = router;
+        _workspaceService = workspaceService;
 
         // ELI5: We need to give the compiler "Books" (References) so it knows what 
         // words like 'String' or 'HttpClient' mean. We load every assembly currently 
@@ -83,6 +86,8 @@ public class DiagnosticService : AbstractService
             } catch (Exception ex) { System.Console.Error.WriteLine($"[DIAG-CACHE-ERR]: {ex.Message}"); }
             return payload;
         });
+        
+        RegisterCompletionRoute();
     }
 
     /// <summary>

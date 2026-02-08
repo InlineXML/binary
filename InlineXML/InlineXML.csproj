@@ -5,7 +5,10 @@
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <NoWarn>$(NoWarn);CS8618;CS8602;CS0618;NU1608;CS8603;CS8625</NoWarn>
+
+        <!-- Suppress 'Auto-property accessor is never used' warnings -->
+        <NoWarn>CS0169;CS8618;CS8019;IDE0051</NoWarn>
+        <Version>0.0.1</Version>
     </PropertyGroup>
 
     <ItemGroup>
