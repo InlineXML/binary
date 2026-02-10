@@ -168,22 +168,24 @@ public class CodeGenerator
     private void GenerateElement(ElementNode element)
     {
         int start = _output.Length;
+        
+        
+        // ELI5: If the tag starts with a Big Letter (like <MyComponent>), it's a class.
+        // If it's small (like <div>), it's just a string name.
+        bool isComponent = char.IsUpper(element.TagName[0]);
+        // Props / Attributes Logic
+        string propsPrefix = isComponent ? "" : "Html";
 
         // ELI5: Start writing the function call, e.g., "UI.Create("
-        _output.Append($"{_factory}.{_method}(\n");
+        _output.Append($"{_factory}.{_method}<{propsPrefix}{ToPascalCase(element.TagName)}Props>(\n");
         _indent++;
 
         // Tag Name Logic
         _output.Append(GetIndent());
-        // ELI5: If the tag starts with a Big Letter (like <MyComponent>), it's a class.
-        // If it's small (like <div>), it's just a string name.
-        bool isComponent = char.IsUpper(element.TagName[0]);
-        _output.Append(isComponent ? element.TagName : $"\"{element.TagName}\"");
+        _output.Append(isComponent ? $"typeof({element.TagName})" : $"\"{element.TagName}\"");
         _output.Append(",\n");
 
-       // Props / Attributes Logic
-        string propsPrefix = isComponent ? "" : "Html";
-        _output.Append($"{GetIndent()}new {propsPrefix}{ToPascalCase(element.TagName)}Props");
+        _output.Append($"{GetIndent()}new()");
         
         if (element.Attributes.Count > 0)
         {
