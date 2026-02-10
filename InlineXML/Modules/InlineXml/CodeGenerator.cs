@@ -185,7 +185,7 @@ public class CodeGenerator
         _output.Append(isComponent ? $"typeof({element.TagName})" : $"\"{element.TagName}\"");
         _output.Append(",\n");
 
-        _output.Append($"{GetIndent()}new()");
+        _output.Append($"{GetIndent()}new {propsPrefix}{ToPascalCase(element.TagName)}Props");
         
         if (element.Attributes.Count > 0)
         {
